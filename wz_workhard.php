@@ -5,7 +5,7 @@ Description: Workhard
 Author: User
 Version: 1.4
 */
-
+require_once 'WzUploadFile.php';
 include(dirname(__FILE__).'/wz_workhard_api.php');
 include(dirname(__FILE__).'/wz_workhard_sql.php');
 

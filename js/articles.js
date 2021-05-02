@@ -121,8 +121,8 @@ var ArticlesListPage = {
       params.append('order_name', article.order_name);
       params.append('title', article.title);
       params.append('description', article.description);
-      params.append('text', article.text);
       params.append('category_id', self.selectedPermissionFolders.categoryID);
+      params.append('text', article.text);
            
 
       axios.post(WORKHARD.admin_post, params)
@@ -135,7 +135,7 @@ var ArticlesListPage = {
           var postUrl = response.data.post_url;
         
           self.moveTaskToFolder(self.selectedPermissionFolders.toFolderID, taskID);
-
+          self.stripAttributesPost(response.data.post_id)
           self.insertSpreadsheetUser(folderName, article.order_name, postUrl, self.price, article.total_price);
         })
         .catch(function (error) {
@@ -164,6 +164,16 @@ var ArticlesListPage = {
       params.append('post_url', postUrl);
       params.append('price', price);
       params.append('total_price', totalPrice);
+
+      axios.post(WORKHARD.admin_post, params);
+    },
+    /* Удалить атрибуты у тегов */
+    stripAttributesPost: function ($postId) {
+      var params = new URLSearchParams();
+      params.append('action', 'wz_workhard_ajax_articles');
+      params.append('nonce',  WORKHARD.nonce);
+      params.append('method', 'strip_attributes_post');
+      params.append('post_id', $postId);
 
       axios.post(WORKHARD.admin_post, params);
     },
@@ -227,19 +237,18 @@ var ArticleEditPage = {
       params.append('order_name', this.article.order_name);
       params.append('title', this.article.title);
       params.append('description', this.article.description);
-      params.append('text', this.article.text);
       params.append('category_id', this.$route.params.category_id);
-      
+      params.append('text', this.article.text);
+
 
       axios.post(WORKHARD.admin_post, params)
         .then(function (response) {
           if (!response.data.post_id) {
             return;
           }
-        
+          self.stripAttributesPost(response.data.post_id);
           self.moveTaskToFolder();
           self.insertSpreadsheetUser(response.data.post_url);
-        
           swal({
               title: "Запись успешно добавлена!",
               text: "Перейти к записи?",
@@ -285,6 +294,16 @@ var ArticleEditPage = {
       params.append('post_url', $postUrl);
       params.append('price', this.price);
       params.append('total_price', this.article.total_price);
+
+      axios.post(WORKHARD.admin_post, params);
+    },
+    /* Удалить атрибуты у тегов */
+    stripAttributesPost: function ($postId) {
+      var params = new URLSearchParams();
+      params.append('action', 'wz_workhard_ajax_articles');
+      params.append('nonce',  WORKHARD.nonce);
+      params.append('method', 'strip_attributes_post');
+      params.append('post_id', $postId);
 
       axios.post(WORKHARD.admin_post, params);
     }

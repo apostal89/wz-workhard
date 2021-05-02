@@ -35,10 +35,12 @@ function wz_workhard_articles_callback()
 
     $price_field = null;
 
-    foreach ($options_spreadsheet_users as $item) {
-        if ($item['user_id'] == $current_user_id) {
-            $price_field = $item['price'];
-            break;
+    if ($options_spreadsheet_users) {
+        foreach ($options_spreadsheet_users as $item) {
+            if ($item['user_id'] == $current_user_id) {
+                $price_field = $item['price'];
+                break;
+            }
         }
     }
 
@@ -230,7 +232,6 @@ function wz_workhard_ajax_articles()
             /* Вставить новую статью в черновик */
             $title = !empty($_POST['title']) ? $_POST['title'] : $_POST['order_name'];
             $description = !empty($_POST['description']) ? $_POST['description'] : '';
-
             // Создаём объект записи
             $new_post = array(
                 'post_title' => $title,
@@ -245,11 +246,9 @@ function wz_workhard_ajax_articles()
             if (!is_plugin_active('wordpress-seo/wp-seo.php') || (is_plugin_active('wordpress-seo/wp-seo.php') && !$options_users['yoast_description'])) {
                 $new_post['post_excerpt'] = $description;
             }
-
             // Вставляем запись в базу данных
             $post_id = wp_insert_post($new_post);
             $post_url = wz_get_url_from_wp_posts_db($post_id);
-
 
             // Вставляем запись в yoast seo
             if (is_plugin_active('wordpress-seo/wp-seo.php')) {
@@ -262,6 +261,12 @@ function wz_workhard_ajax_articles()
                 }
             }
 
+            $content = wz_workhard_upload_images($post_id, $title, $_POST['text']);
+            $new_post = [
+                'ID' => $post_id,
+                'post_content' => $content,
+            ];
+            wp_update_post($new_post, true);
             echo json_encode(array('post_id' => $post_id, 'post_url' => $post_url));
             wp_die();
 
@@ -326,7 +331,82 @@ function wz_workhard_ajax_articles()
             // Проверить есть ли заголовки, если нет то создать
             // Вставить записи
 
+        } elseif ($_POST['method'] === 'strip_attributes_post' && wzz_validate_params(array('method', 'post_id'))) {
+            $post = get_post($_POST['post_id']);
+            if ($post) {
+                $content = wz_html_remove_attributes($post->post_content);
+                $new_post = [
+                    'ID' => $post->ID,
+                    'post_content' => $content,
+                ];
+                wp_update_post($new_post, true);
+            }
+            echo json_encode(['post_id' => $_POST['post_id']]);
+            wp_die();
+        }
+    }
+}
+
+function wz_workhard_upload_images($post_id, $post_name, $content) {
+
+    $images = findAllImage(stripslashes($content));
+
+    if (count($images) === 0) {
+        return false;
+    }
+    foreach ($images as $image) {
+        $uploader = new WzUploadFile($post_id, $post_name, $image['url'], $image['alt']);
+        if ($uploadedImage = $uploader->save()) {
+            $urlParts = parse_url($uploadedImage['url']);
+            $base_url = $uploader::getHostUrl(null, true);
+            $image_url = $base_url . $urlParts['path'];
+            $content = preg_replace('/'. preg_quote($image['url'], '/') .'/', $image_url, $content);
+            $content = preg_replace('/alt=["\']'. preg_quote($image['alt'], '/') .'["\']/', "alt='{$uploader->getAlt()}'", $content);
+        }
+    }
+    return $content;
+}
+
+function findAllImage($content) {
+    $urls1 = [];
+    preg_match_all('/<img[^>]*srcset=["\']([^"\']*)[^"\']*["\'][^>]*>/i', $content, $srcsets, PREG_SET_ORDER);
+    if (count($srcsets) > 0) {
+        $count = 0;
+        foreach ($srcsets as $key => $srcset) {
+            preg_match_all('/https?:\/\/[^\s,]+/i', $srcset[1], $srcsetUrls, PREG_SET_ORDER);
+            if (count($srcsetUrls) == 0) {
+                continue;
+            }
+            foreach ($srcsetUrls as $srcsetUrl) {
+                $urls1[$count][] = $srcset[0];
+                $urls1[$count][] = $srcsetUrl[0];
+                $count++;
+            }
         }
     }
 
+    preg_match_all('/<img[^>]*src=["\']([^"\']*)[^"\']*["\'][^>]*>/i', $content, $urls, PREG_SET_ORDER);
+    $urls = array_merge($urls, $urls1);
+
+    if (count($urls) == 0) {
+        return [];
+    }
+    foreach ($urls as $index => &$url) {
+        $images[$index]['alt'] = preg_match('/<img[^>]*alt=["\']([^"\']*)[^"\']*["\'][^>]*>/i', $url[0], $alt) ? $alt[1] : null;
+        $images[$index]['url'] = $url = $url[1];
+    }
+    foreach (array_unique($urls) as $index => $url) {
+        $unique_array[] = $images[$index];
+    }
+    return $unique_array;
+}
+
+function wz_html_remove_attributes($content)
+{
+    $content = preg_replace('/\s?class=["][^"]*"\s?/i', ' ', $content);
+    $content = preg_replace('/\s?style=["][^"]*"\s?/i', ' ', $content);
+    $content = preg_replace('/\s?id=["][^"]*"\s?/i', ' ', $content);
+    $content = preg_replace('/\s?width=["][^"]*"\s?/i', ' ', $content);
+    $content = preg_replace('/\s?height=["][^"]*"\s?/i', ' ', $content);
+    return $content;
 }
